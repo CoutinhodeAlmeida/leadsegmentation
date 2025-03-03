@@ -22,7 +22,7 @@ def process_excel():
             return {"error": "No selected file"}, 400
 
         # Read the uploaded Excel file into a DataFrame
-        df = pd.read_excel(excel_file, sheet_name=None)
+        df = pd.read_excel(excel_file, sheet_name=None, engine="openpyxl")
 
         # Extract the first sheet (you can adjust as needed)
         sheet_name = "Sheet1"  # Adjust this if needed
