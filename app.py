@@ -1,64 +1,54 @@
 from flask import Flask, request, send_file
 import pandas as pd
 import io
-from openpyxl import Workbook
 
 app = Flask(__name__)
 
 @app.route('/', methods=['GET'])  # Health check route
 def home():
-    return "Excel Processing API is running!"
+    return "CSV Processing API is running!"
 
 @app.route('/process', methods=['POST'])  # Main API endpoint
-def process_excel():
+def process_csv():
     try:
         # Check if 'file' is in the request
         if 'file' not in request.files:
             return {"error": "No file part in the request"}, 400
 
-        excel_file = request.files['file']
+        csv_file = request.files['file']
 
-        if excel_file.filename == '':
+        if csv_file.filename == '':
             return {"error": "No selected file"}, 400
 
-        # Read the uploaded Excel file into a DataFrame
-        df = pd.read_excel(excel_file, sheet_name=None, engine="openpyxl")
+        # Read the uploaded CSV file into a DataFrame
+        df = pd.read_csv(csv_file)
 
-        # Extract the first sheet (you can adjust as needed)
-        sheet_name = "Sheet1"  # Adjust this if needed
-        if sheet_name not in df:
-            return {"error": f"Worksheet '{sheet_name}' not found."}, 400
-
-        data = df[sheet_name]
-        
-        # Find the column index for "Oportunidades[Responsavel]"
-        responsavel_col_index = data.columns.get_loc("Oportunidades[Responsavel]") if "Oportunidades[Responsavel]" in data.columns else -1
-        
-        if responsavel_col_index == -1:
+        # Check if the required column exists
+        if "Oportunidades[Responsavel]" not in df.columns:
             return {"error": "Column 'Oportunidades[Responsavel]' not found."}, 400
         
         # Filter rows based on unique "Responsavel" values
-        unique_responsaveis = data["Oportunidades[Responsavel]"].dropna().unique()
+        unique_responsaveis = df["Oportunidades[Responsavel]"].dropna().unique()
 
-        # Create a new Excel workbook to store results
+        # Create a BytesIO object to hold the CSV output
         output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            # Add the filtered data for each unique "Responsavel" in a new sheet
-            for responsavel in unique_responsaveis:
-                # Filter rows based on the "Responsavel"
-                filtered_data = data[data["Oportunidades[Responsavel]"] == responsavel]
-                
-                if filtered_data.empty:
-                    continue
 
-                # Write the filtered data to a new sheet with the "Responsavel" name
-                filtered_data.to_excel(writer, sheet_name=str(responsavel), index=False)
+        # Write the filtered data for each unique "Responsavel" into separate CSV files
+        for responsavel in unique_responsaveis:
+            # Filter rows based on the "Responsavel"
+            filtered_data = df[df["Oportunidades[Responsavel]"] == responsavel]
 
+            if filtered_data.empty:
+                continue
+
+            # Write the filtered data to the output CSV file
+            filtered_data.to_csv(output, index=False, header=True)
+        
+        # Reset the pointer to the beginning of the BytesIO object
         output.seek(0)
 
-        # Return the modified Excel file
-        return send_file(output, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                         as_attachment=True, download_name="modified_workbook.xlsx")
+        # Return the modified CSV data
+        return send_file(output, mimetype="text/csv", as_attachment=True, download_name="modified_data.csv")
 
     except Exception as e:
         return {"error": str(e)}, 500
